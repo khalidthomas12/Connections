@@ -4,12 +4,12 @@
 //
 //  Created by Khalid Thomas on 1/29/23.
 //
-
 import SwiftUI
 import FirebaseAuth
 
 struct ContentView: View {
     
+    @ObservedObject var workoutData: WorkoutData
     @AppStorage("uid") var userID: String = ""
     
     var body: some View {
@@ -18,7 +18,7 @@ struct ContentView: View {
             AuthView()
         } else {
             VStack{
-                HomeScreen()
+                HomeScreen(workoutData: workoutData) 
                 
                 Button(action: {
                     let firebaseAuth = Auth.auth()
@@ -40,10 +40,3 @@ struct ContentView: View {
     }
     
 }
-
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
-    }
-}
-

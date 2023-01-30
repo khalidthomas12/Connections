@@ -8,14 +8,15 @@
 import SwiftUI
 import UIKit
 import Firebase
+import FirebaseDatabase
+import FirebaseStorage
 
 
-import SwiftUI
-import Firebase
 
-struct HomePage: View {
+struct HomeScreen: View {
+    
     @State private var selection = 0
-    @ObservedObject var workoutData: WorkoutData
+    var workoutData: WorkoutData
     
     var body: some View {
         TabView(selection: $selection) {
@@ -40,50 +41,77 @@ struct InputWorkoutView: View {
     @State private var workoutName = ""
     @State private var image: UIImage?
     @State private var showImagePicker = false
-   
+    
     var body: some View {
-
-                NavigationView {
-                    VStack {
-                        HStack {
-                            TextField("Workout Name", text: $workoutName)
-                                .padding()
-                                .background(Color(.white))
-                                .cornerRadius(5.0)
-                                .shadow(radius: 5.0)
-                            Button(action: {
-                                self.showImagePicker.toggle()
-                            }) {
-                                Image(systemName: "camera")
-                                    .padding()
-                                    .background(Color.gray)
-                                    .cornerRadius(5.0)
-                                    .shadow(radius: 5.0)
-                            }
-                        }
-                        if image != nil {
-                            Image(uiImage: image!)
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 200, height: 200)
-                        }
-                        Button(action: {
-                            // Your code to save workout data and image to Firebase goes here
-                        }) {
-                            Text("Save Workout")
-                                .padding()
-                                .background(Color.blue)
-                                .foregroundColor(.white)
-                                .cornerRadius(5.0)
-                                .shadow(radius: 5.0)
-                        }
-                    }
-                    .sheet(isPresented: $showImagePicker) {
-                        ImagePicker(image: self.$image)
+        
+        NavigationView {
+            VStack(spacing: 15) {
+                HStack {
+                    TextField("Workout Name", text: $workoutName)
+                        .padding()
+                        .background(Color(.white))
+                        .cornerRadius(5.0)
+                        .shadow(radius: 5.0)
+                    Button(action: {
+                        self.showImagePicker.toggle()
+                    }) {
+                        Image(systemName: "camera")
+                            .padding()
+                            .background(Color.gray)
+                            .cornerRadius(5.0)
+                            .shadow(radius: 5.0)
                     }
                 }
+                if image != nil {
+                    Image(uiImage: image!)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 200, height: 200)
+                }
+                Button(action: {
+                    // Save workout data and image to Firebase
+                    let workoutRef = db.collection("workouts").document()
+                    let workoutID = workoutRef.documentID
+                    workoutRef.setData([
+                        "workoutName": workoutName,
+                        "workoutID": workoutID
+                    ]) { (error) in
+                        if let error = error {
+                            print("Error adding workout data: \(error)")
+                        } else {
+                            print("Workout data added with ID: \(workoutID)")
+                        }
+                    }
+                    // Upload image to Firebase Storage
+                    if let image = self.image {
+                        let storageRef = Storage.storage().reference().child("workout_images/\(workoutID).jpg")
+                        if let uploadData = image.jpegData(compressionQuality: 0.75) {
+                            storageRef.putData(uploadData, metadata: nil) { (metadata, error) in
+                                if let error = error {
+                                    print("Error uploading image: \(error)")
+                                } else {
+                                    print("Image uploaded successfully")
+                                }
+                            }
+                        }
+                    }
+                }) {
+                    Text("Save Workout")
+                        .padding()
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(5.0)
+                        .shadow(radius: 5.0)
+                }
+                .sheet(isPresented: $showImagePicker) {
+                    ImagePicker(image: self.$image)
+                }
             }
+            .padding()
         }
+    }
+    
+}
 
 struct ImagePicker: UIViewControllerRepresentable {
     @Binding var image: UIImage?
@@ -190,10 +218,10 @@ struct WorkoutForumView: View {
       .navigationBarTitle("Workout Forum")
 
       HStack {
-        TextField("Add a post", text: $workoutData.newPostText)
+          TextField("Add a post", text: $workoutData.newPostText)
           .padding()
           Button(action: {
-              self.$workoutData.addPost(username: username, text: newPostText)
+              self.workoutData.addPost(text: self.newPostText)
                   }) {
                       Text("Post")
                   }
@@ -206,56 +234,20 @@ struct WorkoutForumView: View {
 
     
 class WorkoutData: ObservableObject {
-    lazy var posts = [Post]()
-    @State var username: String
-    @State var text: String
-    @State var newPostText = ""
-    @ObservedObject var workoutData: WorkoutData
-    
-    init(username: String, text: String) {
-        self.username = username
-        self.text = text
-        
-        
-    let db = Firestore.firestore()
-    db.collection("posts").addSnapshotListener { (querySnapshot, error) in
-        guard let documents = querySnapshot?.documents else {
-        print("Error fetching documents: \(error!)")
-        return
-        }
-        self.posts = documents.map { document in
-        let data = document.data()
-        let username = data["username"] as? String ?? "Unknown"
-        let text = data["text"] as? String ?? "No text"
-        return Post(username: username, text: text)
-            
-        }
-        
-    }
-            
-          }
+    @Published var posts: [Post]
+    @Published var currentUsername: String
+    @Published var newPostText = ""
 
-    func addPost(username: String, text: String) {
-        let db = Firestore.firestore()
-        db.collection("posts").addDocument(data: [
-            "username": username,
-            "text": text
-        ]) { (error) in
-            if let error = error {
-            print("Error adding document: \(error)")
-            } else {
-            print("Document added")
-            }
-        }
+    init(posts: [Post], currentUsername: String) {
+        self.posts = posts
+        self.currentUsername = currentUsername
+    }
+
+    func addPost(text: String) {
+        let post = Post(username: currentUsername, text: text)
+        posts.append(post)
     }
 }
-
-
-
-
-
-
-
 
 
     
@@ -266,233 +258,3 @@ struct Post: Identifiable {
 }
 
 
-//
-//struct HomeScreen: View {
-//    @State private var search: String = ""
-//    @State private var selectedIndex: Int = 1
-//
-//    private let categories = ["All", "Chair", "Sofa", "Lamp", "Kitchen", "Table"]
-//
-//
-//    var body: some View {
-//        NavigationView {
-//            ZStack {
-//                Color(#colorLiteral(red: 0.937254902, green: 0.937254902, blue: 0.937254902, alpha: 1))
-//                    .ignoresSafeArea()
-//
-//                ScrollView (showsIndicators: false) {
-//                    VStack (alignment: .leading) {
-//
-//                        //AppBarView()
-//
-//                        TagLineView()
-//                            .padding()
-//
-//                        SearchAndScanView(search: $search)
-//
-//                        ScrollView (.horizontal, showsIndicators: false) {
-//                            HStack {
-//                                ForEach(0 ..< categories.count) { i in
-//                                    Button(action: {selectedIndex = i}) {
-//                                        CategoryView(isActive: selectedIndex == i, text: categories[i])
-//                                    }
-//                                }
-//                            }
-//                            .padding()
-//                        }
-//
-//                        Text("Recent Workouts")
-//                            .font(.custom("PlayfairDisplay-Bold", size: 24))
-//                            .padding(.horizontal)
-//
-//                        ScrollView (.horizontal, showsIndicators: false) {
-//                            HStack (spacing: 0) {
-//                                ForEach(0 ..< 4) { i in
-//                                    NavigationLink(
-//                                        destination: DetailScreen(),
-//                                        label: {
-//                                            ProductCardView(image: Image("chair_\(i+1)"), size: 210)
-//                                        })
-//                                        .navigationBarHidden(true)
-//                                        .foregroundColor(.black)
-//                                }
-//                                .padding(.leading)
-//                            }
-//                        }
-//                        .padding(.bottom)
-//
-//                        Text("Best")
-//                            .font(.custom("PlayfairDisplay-Bold", size: 24))
-//                            .padding(.horizontal)
-//
-//                        ScrollView (.horizontal, showsIndicators: false) {
-//                            HStack (spacing: 0) {
-//                                ForEach(0 ..< 4) { i in
-//                                    ProductCardView(image: Image("chair_\(4-i)"), size: 180)
-//                                }
-//                                .padding(.leading)
-//                            }
-//                        }
-//
-//                    }
-//                }
-//
-//                VStack {
-//                    Spacer()
-//                    BottomNavBarView()
-//                }
-//            }
-//        }
-////        .navigationBarTitle("") //this must be empty
-////        .navigationBarHidden(true)
-////        .navigationBarBackButtonHidden(true)
-//    }
-//}
-//
-//struct HomeScreen_Previews: PreviewProvider {
-//    static var previews: some View {
-//        HomeScreen()
-//    }
-//}
-//
-//
-//// MARK: Potential AppBar
-//
-////struct AppBarView: View {
-////    var body: some View {
-////        HStack {
-////            Button(action: {}) {
-////                Image("menu")
-////                    .padding()
-////                    .background(Color.blue)
-////                    .cornerRadius(10.0)
-////            }
-////
-////            Spacer()
-////
-////            Button(action: {}) {
-////                Image(systemName: "star")
-////                    .resizable()
-////                    .frame(width: 42, height: 42)
-////                    .cornerRadius(10.0)
-////            }
-////        }
-////        .padding(.horizontal)
-////    }
-////}
-//
-//struct TagLineView: View {
-//    var body: some View {
-//        Text("Find the \nBest ")
-//            .font(.custom("PlayfairDisplay-Regular", size: 28))
-//            .foregroundColor(Color("Primary"))
-//            + Text("Furniture!")
-//            .font(.custom("PlayfairDisplay-Bold", size: 28))
-//            .fontWeight(.bold)
-//            .foregroundColor(Color("Primary"))
-//    }
-//}
-//
-//struct SearchAndScanView: View {
-//
-//    @Binding var search: String
-//
-//    var body: some View {
-//
-//        HStack {
-//            HStack {
-//                Image("Search")
-//                    .padding(.trailing, 8)
-//                TextField("Search Furniture", text: $search)
-//            }
-//            .padding(.all, 20)
-//            .background(Color.white)
-//            .cornerRadius(10.0)
-//            .padding(.trailing, 8)
-//
-//            Button(action: {}) {
-//                Image("Scan")
-//                    .padding()
-//                    .background(Color("Primary"))
-//                    .cornerRadius(10.0)
-//            }
-//        }
-//        .padding(.horizontal)
-//    }
-//}
-//
-//struct CategoryView: View {
-//    let isActive: Bool
-//    let text: String
-//    var body: some View {
-//        VStack (alignment: .leading, spacing: 0) {
-//            Text(text)
-//                .font(.system(size: 18))
-//                .fontWeight(.medium)
-//                .foregroundColor(isActive ? Color("Primary") : Color.black.opacity(0.5))
-//            if (isActive) { Color("Primary")
-//                .frame(width: 15, height: 2)
-//                .clipShape(Capsule())
-//            }
-//        }
-//        .padding(.trailing)
-//    }
-//}
-//
-//struct ProductCardView: View {
-//    let image: Image
-//    let size: CGFloat
-//
-//    var body: some View {
-//        VStack {
-//            image
-//                .resizable()
-//                .frame(width: size, height: 200 * (size/210))
-//                .cornerRadius(20.0)
-//            Text("Luxury Swedian chair").font(.title3).fontWeight(.bold)
-//
-//            HStack (spacing: 2) {
-//                ForEach(0 ..< 5) { item in
-//                    Image("star")
-//                }
-//                Spacer()
-//                Text("$1299")
-//                    .font(.title3)
-//                    .fontWeight(.bold)
-//            }
-//        }
-//        .frame(width: size)
-//        .padding()
-//        .background(Color.white)
-//        .cornerRadius(20.0)
-//
-//    }
-//}
-//
-//
-//struct BottomNavBarView: View {
-//    var body: some View {
-//        HStack {
-//            BottomNavBarItem(image: Image("Home"), action: {})
-//            BottomNavBarItem(image: Image("fav"), action: {})
-//            BottomNavBarItem(image: Image("shop"), action: {})
-//            BottomNavBarItem(image: Image("User"), action: {})
-//        }
-//        .padding()
-//        .background(Color.white)
-//        .clipShape(Capsule())
-//        .padding(.horizontal)
-//        .shadow(color: Color.blue.opacity(0.15), radius: 8, x: 2, y: 6)
-//    }
-//}
-//
-//struct BottomNavBarItem: View {
-//    let image: Image
-//    let action: () -> Void
-//    var body: some View {
-//        Button(action: action) {
-//            image
-//                .frame(maxWidth: .infinity)
-//        }
-//    }
-//}
