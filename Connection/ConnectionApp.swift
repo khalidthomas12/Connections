@@ -17,7 +17,7 @@ struct SwiftUI_AuthApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(workoutData: workoutData)
         }
     }
 }
