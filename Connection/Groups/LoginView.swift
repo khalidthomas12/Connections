@@ -37,9 +37,10 @@ struct LoginView: View {
                     
                     Spacer()
                     
-                    Text("Welcome Back!")
+                    Text("Welcome Back, Big Dawg!")
                         .font(.largeTitle)
                         .bold()
+                        .multilineTextAlignment(.center)
                         
                     
                     Spacer()

@@ -17,24 +17,28 @@ struct ContentView: View {
         if userID == "" {
             AuthView()
         } else {
-            Text("Logged In! \nYour user id is \(userID)")
-            
-            Button(action: {
-                let firebaseAuth = Auth.auth()
-                do {
-                    try firebaseAuth.signOut()
-                    withAnimation {
-                        userID = ""
+            VStack{
+                HomeScreen()
+                
+                Button(action: {
+                    let firebaseAuth = Auth.auth()
+                    do {
+                        try firebaseAuth.signOut()
+                        withAnimation {
+                            userID = ""
+                        }
+                    } catch let signOutError as NSError {
+                        print("Error signing out: %@", signOutError)
                     }
-                } catch let signOutError as NSError {
-                    print("Error signing out: %@", signOutError)
+                }) {
+                    Text("Sign Out")
                 }
-            }) {
-                Text("Sign Out")
+                
             }
+            
         }
-        
     }
+    
 }
 
 struct ContentView_Previews: PreviewProvider {
@@ -42,3 +46,4 @@ struct ContentView_Previews: PreviewProvider {
         ContentView()
     }
 }
+
